@@ -95,8 +95,10 @@ const VideoThumbnailGenerator = () => {
       setProgress(Math.round(((i + 1) / timestamps.length) * 100));
     }
 
-    setFrames(extractedFrames);
-    composeImage(extractedFrames, tw, th);
+    // Trim to a multiple of columns so no row is partially filled
+    const trimmed = extractedFrames.slice(0, Math.floor(extractedFrames.length / columns) * columns || columns);
+    setFrames(trimmed);
+    composeImage(trimmed, tw, th);
     setProcessing(false);
   };
 
