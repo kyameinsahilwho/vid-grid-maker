@@ -21,7 +21,7 @@ const VideoThumbnailGenerator = () => {
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [interval, setInterval_] = useState(2);
   const [columns, setColumns] = useState(4);
-  const [thumbWidth, setThumbWidth] = useState(320);
+  const [thumbWidth, setThumbWidth] = useState(480);
   const [frames, setFrames] = useState<ThumbnailFrame[]>([]);
   const [compositeUrl, setCompositeUrl] = useState<string>("");
   const [processing, setProcessing] = useState(false);
@@ -75,7 +75,9 @@ const VideoThumbnailGenerator = () => {
     }
 
     const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d", { alpha: false })!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     const aspectRatio = video.videoHeight / video.videoWidth;
     const tw = thumbWidth;
     const th = Math.round(tw * aspectRatio);
@@ -91,7 +93,7 @@ const VideoThumbnailGenerator = () => {
         video.onseeked = () => res();
       });
       ctx.drawImage(video, 0, 0, tw, th);
-      extractedFrames.push({ timestamp: t, dataUrl: canvas.toDataURL("image/jpeg", 0.85) });
+      extractedFrames.push({ timestamp: t, dataUrl: canvas.toDataURL("image/jpeg", 1.0) });
       setProgress(Math.round(((i + 1) / timestamps.length) * 100));
     }
 
@@ -103,19 +105,20 @@ const VideoThumbnailGenerator = () => {
   };
 
   const composeImage = (framesData: ThumbnailFrame[], tw: number, th: number) => {
-    const labelH = 28;
     const padding = 4;
     const cols = columns;
     const rows = Math.ceil(framesData.length / cols);
     const cellW = tw + padding * 2;
-    const cellH = th + labelH + padding * 2;
+    const cellH = th + padding * 2;
     const totalW = cols * cellW;
     const totalH = rows * cellH;
 
     const canvas = document.createElement("canvas");
     canvas.width = totalW;
     canvas.height = totalH;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d", { alpha: false })!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.fillStyle = "#0f1115";
     ctx.fillRect(0, 0, totalW, totalH);
 
@@ -130,18 +133,24 @@ const VideoThumbnailGenerator = () => {
 
         ctx.drawImage(img, x, y, tw, th);
 
-        // Timestamp label
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(x, y + th, tw, labelH);
-        ctx.fillStyle = "#e8a930";
-        ctx.font = "bold 14px monospace";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(formatTimestamp(frame.timestamp), x + tw / 2, y + th + labelH / 2);
+        // Timestamp overlay
+        const timestampText = formatTimestamp(frame.timestamp);
+        ctx.font = "bold 16px monospace";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        
+        // Draw black border/shadow for readability
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+        ctx.strokeText(timestampText, x + tw - 8, y + th - 8);
+        
+        // Draw white text
+        ctx.fillStyle = "white";
+        ctx.fillText(timestampText, x + tw - 8, y + th - 8);
 
         loaded++;
         if (loaded === framesData.length) {
-          setCompositeUrl(canvas.toDataURL("image/jpeg", 0.92));
+          setCompositeUrl(canvas.toDataURL("image/jpeg", 1.0));
         }
       };
       img.src = frame.dataUrl;
@@ -160,28 +169,102 @@ const VideoThumbnailGenerator = () => {
     <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
-          <div className="p-2.5 rounded-xl bg-primary/15">
-            <Film className="w-7 h-7 text-primary" />
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/15">
+              <Film className="w-7 h-7 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Video Grid Maker</h1>
+              <p className="text-muted-foreground text-sm">Professional contact sheet generator</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Video Thumbnail Sheet</h1>
-            <p className="text-muted-foreground text-sm">Extract frames and compose a contact sheet</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] sm:text-xs font-medium text-muted-foreground mt-4 md:mt-0">
+            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-green-500" /> Private & Secure</span>
+            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /> 100% Client-Side</span>
           </div>
         </div>
 
+        {/* Hero Section (Only visible before upload) */}
+        {!videoUrl && (
+          <div className="text-center mb-12 space-y-4">
+            <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-br from-foreground to-foreground/60 bg-clip-text text-transparent">
+              Turn your videos into <br /> professional thumbnail grids
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Extract high-quality frames at custom intervals and compose beautiful contact sheets in seconds. Perfect for video catalogs, scene analysis, and storyboarding.
+            </p>
+          </div>
+        )}
+
         {/* Upload Area */}
         {!videoUrl ? (
-          <div
-            onDrop={handleDrop}
-            onDragOver={(e) => e.preventDefault()}
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-border rounded-2xl p-16 text-center cursor-pointer hover:border-primary/50 hover:bg-card/50 transition-all"
-          >
-            <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-lg font-medium mb-1">Drop a video file here</p>
-            <p className="text-muted-foreground text-sm">or click to browse</p>
-            <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
+          <div className="space-y-20">
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-border rounded-3xl p-8 md:p-20 text-center cursor-pointer hover:border-primary/50 hover:bg-card/50 transition-all group bg-card/30 backdrop-blur-sm"
+            >
+              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                <Upload className="w-8 h-8 text-primary" />
+              </div>
+              <p className="text-2xl font-bold mb-2">Drop your video here</p>
+              <p className="text-muted-foreground">or click to browse your files</p>
+              <p className="mt-6 text-xs text-muted-foreground/60 uppercase tracking-widest font-semibold">Supports MP4, MOV, WEBM and more</p>
+              <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
+            </div>
+
+            {/* Educational Sections */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 pt-8">
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Grid3X3 className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold">Smart Grids</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Automatically extract frames at any interval. Whether it's every second or every minute, we capture the perfect shots.
+                </p>
+              </div>
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Download className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold">Pro Quality</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Export your grids in high-resolution JPEG format with lossless quality. Perfect for professional documentation and sharing.
+                </p>
+              </div>
+              <div className="space-y-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Film className="w-6 h-6 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold">Local Processing</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Your videos never leave your computer. All processing happens 100% in your browser, ensuring maximum privacy and speed.
+                </p>
+              </div>
+            </div>
+
+            {/* How it works */}
+            <div className="bg-card/50 border border-border rounded-3xl p-10 md:p-16">
+              <h3 className="text-2xl font-bold mb-10 text-center">How it works</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {[
+                  { step: "01", title: "Select Video", desc: "Choose any video file from your device. We support all major formats." },
+                  { step: "02", title: "Customize", desc: "Set your preferred frame interval, number of columns, and thumbnail width." },
+                  { step: "03", title: "Download", desc: "Preview your grid in real-time and download the high-quality final image." }
+                ].map((item, i) => (
+                  <div key={i} className="relative">
+                    <span className="text-6xl font-black text-primary/10 absolute -top-4 -left-2 select-none">{item.step}</span>
+                    <div className="relative z-10 pt-4">
+                      <h4 className="text-lg font-bold mb-2">{item.title}</h4>
+                      <p className="text-sm text-muted-foreground">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
@@ -219,9 +302,9 @@ const VideoThumbnailGenerator = () => {
             {/* Result */}
             {compositeUrl && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <p className="text-sm text-muted-foreground">{frames.length} frames extracted</p>
-                  <Button onClick={downloadImage}>
+                  <Button onClick={downloadImage} className="w-full sm:w-auto">
                     <Download className="w-4 h-4 mr-2" />Download Image
                   </Button>
                 </div>
@@ -233,6 +316,25 @@ const VideoThumbnailGenerator = () => {
           </div>
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="border-t border-border mt-20">
+        <div className="max-w-6xl mx-auto px-4 py-12">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="flex items-center gap-2">
+              <Film className="w-5 h-5 text-primary" />
+              <span className="font-bold tracking-tight">Video Grid Maker</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} Video Grid Maker. Built for high-performance video analysis.
+            </p>
+            <div className="flex gap-6 text-sm font-medium text-muted-foreground">
+              <a href="#" className="hover:text-primary transition-colors">Privacy Policy</a>
+              <a href="#" className="hover:text-primary transition-colors">Terms of Service</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
