@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Download, Loader2, Film, Grid3X3 } from "lucide-react";
 
 interface ThumbnailFrame {
@@ -19,7 +20,9 @@ const formatTimestamp = (seconds: number): string => {
 const VideoThumbnailGenerator = () => {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>("");
+  const [generationMode, setGenerationMode] = useState<"interval" | "count">("interval");
   const [interval, setInterval_] = useState(2);
+  const [imageCount, setImageCount] = useState(12);
   const [columns, setColumns] = useState(4);
   const [thumbWidth, setThumbWidth] = useState(480);
   const [frames, setFrames] = useState<ThumbnailFrame[]>([]);
@@ -70,8 +73,16 @@ const VideoThumbnailGenerator = () => {
 
     const duration = video.duration;
     const timestamps: number[] = [];
-    for (let t = 0; t < duration; t += interval) {
-      timestamps.push(t);
+
+    if (generationMode === "interval") {
+      for (let t = 0; t < duration; t += interval) {
+        timestamps.push(t);
+      }
+    } else {
+      const sliceDuration = duration / imageCount;
+      for (let i = 0; i < imageCount; i++) {
+        timestamps.push((i * sliceDuration) + (sliceDuration / 2));
+      }
     }
 
     const canvas = document.createElement("canvas");
@@ -97,8 +108,10 @@ const VideoThumbnailGenerator = () => {
       setProgress(Math.round(((i + 1) / timestamps.length) * 100));
     }
 
-    // Trim to a multiple of columns so no row is partially filled
-    const trimmed = extractedFrames.slice(0, Math.floor(extractedFrames.length / columns) * columns || columns);
+    // Trim to a multiple of columns so no row is partially filled if using interval mode
+    const trimmed = generationMode === "interval"
+      ? extractedFrames.slice(0, Math.floor(extractedFrames.length / columns) * columns || columns)
+      : extractedFrames;
     setFrames(trimmed);
     composeImage(trimmed, tw, th);
     setProcessing(false);
@@ -274,10 +287,21 @@ const VideoThumbnailGenerator = () => {
                 <video ref={videoRef} src={videoUrl} controls className="w-full" />
               </div>
               <div className="bg-card rounded-xl border border-border p-5 space-y-5">
-                <div>
-                  <Label className="text-sm text-muted-foreground mb-1.5 block">Interval (seconds)</Label>
-                  <Input type="number" min={0.5} step={0.5} value={interval} onChange={(e) => setInterval_(+e.target.value)} className="bg-secondary border-border" />
-                </div>
+                <Tabs value={generationMode} onValueChange={(val) => setGenerationMode(val as "interval" | "count")} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="interval">Interval</TabsTrigger>
+                    <TabsTrigger value="count">Count</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="interval" className="mt-4">
+                    <Label className="text-sm text-muted-foreground mb-1.5 block">Interval (seconds)</Label>
+                    <Input type="number" min={0.5} step={0.5} value={interval} onChange={(e) => setInterval_(+e.target.value)} className="bg-secondary border-border" />
+                  </TabsContent>
+                  <TabsContent value="count" className="mt-4">
+                    <Label className="text-sm text-muted-foreground mb-1.5 block">Number of Images</Label>
+                    <Input type="number" min={1} max={100} value={imageCount} onChange={(e) => setImageCount(+e.target.value)} className="bg-secondary border-border" />
+                  </TabsContent>
+                </Tabs>
+
                 <div>
                   <Label className="text-sm text-muted-foreground mb-1.5 block">Columns</Label>
                   <Input type="number" min={1} max={10} value={columns} onChange={(e) => setColumns(+e.target.value)} className="bg-secondary border-border" />
